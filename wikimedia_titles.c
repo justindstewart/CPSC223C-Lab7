@@ -7,8 +7,7 @@
 
   Lab 7: Parsing Wikimedia XML
 
-  Authors: TODO: replace this with your names and CSUF email addresses
-
+  Authors: Justin Stewart (scubastew@csu.fullerton.edu)
 */ 
 
 #include <assert.h>
@@ -23,7 +22,41 @@
 
 /* TODO: You will probably need to declare several helper functions
    and a structure type to use as userData with expat. */
+//typedef struct titleList_l {
+//char** stringAr;
+//int inTag;
+//int numStrings;
+//}titleList;
 
+void startEleCount(void *userData, const char *name, const char **atts) {
+  int *i = (int *) userData;
+  if(strcmp(name, "title") == 0) {
+    (*i)++;;
+  }
+}
+
+/* void start(void* userData, const char* name, const char **atts) { */
+/*   if(strcmp(name, "title") == 0) { */
+/*     userData->inTag = 1; */
+/*   } */
+/* } */
+    
+void endEleCount(void *userData, const char *name) {}
+
+/* void end(void *userData, const char *name) { */
+/*   if(strcmp(name, "title") == 0) { */
+/*     userData->inTag = 0; */
+/*     userData->numStrings++; */
+/*   } */
+/* } */
+    
+void charhndlr(void *userData, const char *s, int len) {}
+
+/* void charhndl(void *userData, const char *s, int len){ */
+/*   if(userData->inTag == 1) { */
+    
+/*   } */
+/* } */
 Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
   /* TODO: implement this function */
 
@@ -36,15 +69,21 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
   /* String containing the text of the entire XML file. */
   char* xml;
   int xml_length;
-
+  FILE* f;
+  int titles = 0;
+  XML_Parser p;
+  // titleList* q;
   assert(path);
+  
+  // q->numStrings = 0;
+  //  q->inTag = 0;
 
   fprintf(stderr, "loading '%s'...", path);
   /* TODO: Load the contents of path into xml. Specifically:
 
      - Try to open path with mode "rb" so seeking will work
        properly. If that fails, print an error message and return NULL
-
+      
      - Seek to the end with fseek().
 
      - Use ftell() to determine the number of bytes in the file.
@@ -57,7 +96,33 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
        
      - Close the file.
   */
+
+  f = fopen(path, "rb");
+  if (f == NULL) {
+    return NULL;
+  }
+
+  fseek(f, 0, SEEK_END);
+
+  xml_length = ftell(f);
+
+  rewind(f);
+
   fprintf(stderr, "\n");
+
+  xml = malloc(xml_length);
+  
+  if(xml == NULL) {
+    return NULL;
+  }
+  
+  fread(xml, xml_length, 1, f);
+
+  if(xml == NULL) {
+    return NULL;
+  }
+
+  fclose(f);
 
   fprintf(stderr, "counting title tags...");
   /* TODO: Use expat to count hw many <title> tags exist in the XML
@@ -82,7 +147,20 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
 
      - Finally free the parser.
   */
-  fprintf(stderr, "found %i\n", 0); /* TODO: fix this to actually print the right number */
+  
+  p = XML_ParserCreate(NULL);
+  
+  XML_SetUserData(p, &titles);
+
+  XML_SetElementHandler(p, startEleCount, endEleCount);
+
+  XML_SetCharacterDataHandler(p, charhndlr);
+
+  XML_Parse(p, xml, xml_length, 0);
+
+  XML_ParserFree(p);
+
+  fprintf(stderr, "found %i\n", (int) titles); /* TODO: fix this to actually print the right number */
 
   fprintf(stderr, "parsing titles...");
   /* TODO: Now use expat to parse out each title string and place it
@@ -119,7 +197,10 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
      - Finally free the parser.
   */
   fprintf(stderr, "\n");
+  
+  // p = XML_ParserCreate(NULL);
 
+  // XML_SetUserData();
   /* At this point we've extracted everything we need from the xml
      string, so free it. */
   free(xml);
