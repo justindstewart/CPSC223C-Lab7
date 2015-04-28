@@ -22,41 +22,58 @@
 
 /* TODO: You will probably need to declare several helper functions
    and a structure type to use as userData with expat. */
-//typedef struct titleList_l {
-//char** stringAr;
-//int inTag;
-//int numStrings;
-//}titleList;
+typedef struct titleList_l {
+  char** stringAr;
+  bool inTag;
+  int numStrings;
+}titleList;
+
+int cstring_cmp(const void *a, const void *b) {
+  const char **ia = (const char **)a;
+  const char **ib = (const char **)b;
+  return strcmp(*ia, *ib);
+}
 
 void startEleCount(void *userData, const char *name, const char **atts) {
   int *i = (int *) userData;
   if(strcmp(name, "title") == 0) {
-    (*i)++;;
+    (*i)++;
   }
 }
 
-/* void start(void* userData, const char* name, const char **atts) { */
-/*   if(strcmp(name, "title") == 0) { */
-/*     userData->inTag = 1; */
-/*   } */
-/* } */
+void start(void* userData, const char* name, const char **atts) {
+  titleList *p = (titleList *) userData;
+  if(strcmp(name, "title") == 0) {
+    p->inTag = true;
+  }
+}
     
 void endEleCount(void *userData, const char *name) {}
 
-/* void end(void *userData, const char *name) { */
-/*   if(strcmp(name, "title") == 0) { */
-/*     userData->inTag = 0; */
-/*     userData->numStrings++; */
-/*   } */
-/* } */
+void end(void *userData, const char *name) {
+  titleList *p = (titleList *) userData;
+  if(strcmp(name, "title") == 0) {
+    p->inTag = false;
+    p->numStrings++;
+  }
+}
     
 void charhndlr(void *userData, const char *s, int len) {}
 
-/* void charhndl(void *userData, const char *s, int len){ */
-/*   if(userData->inTag == 1) { */
-    
-/*   } */
-/* } */
+void charhndl(void *userData, const char *s, int len){
+  titleList *p = (titleList *) userData;
+
+  if(p->inTag == true) {  
+    char *temp;
+    temp = malloc(len + 1);
+    for(int i = 0; i < len; i++) {
+      temp[i] = s[i];
+    }
+    temp[len] = '\0';
+    p->stringAr[p->numStrings] = strdup(temp);
+    free(temp);
+  }
+}
 Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
   /* TODO: implement this function */
 
@@ -72,11 +89,13 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
   FILE* f;
   int titles = 0;
   XML_Parser p;
-  // titleList* q;
+  titleList q;
+  Wikimedia_Titles* list;
+
   assert(path);
   
-  // q->numStrings = 0;
-  //  q->inTag = 0;
+  q.numStrings = 0;
+  q.inTag = false;
 
   fprintf(stderr, "loading '%s'...", path);
   /* TODO: Load the contents of path into xml. Specifically:
@@ -103,13 +122,9 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
   }
 
   fseek(f, 0, SEEK_END);
-
   xml_length = ftell(f);
-
   rewind(f);
-
   fprintf(stderr, "\n");
-
   xml = malloc(xml_length);
   
   if(xml == NULL) {
@@ -123,7 +138,6 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
   }
 
   fclose(f);
-
   fprintf(stderr, "counting title tags...");
   /* TODO: Use expat to count hw many <title> tags exist in the XML
      text:
@@ -151,16 +165,12 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
   p = XML_ParserCreate(NULL);
   
   XML_SetUserData(p, &titles);
-
   XML_SetElementHandler(p, startEleCount, endEleCount);
-
   XML_SetCharacterDataHandler(p, charhndlr);
-
   XML_Parse(p, xml, xml_length, 0);
-
   XML_ParserFree(p);
 
-  fprintf(stderr, "found %i\n", (int) titles); /* TODO: fix this to actually print the right number */
+  fprintf(stderr, "found %i\n", titles); /* TODO: fix this to actually print the right number */
 
   fprintf(stderr, "parsing titles...");
   /* TODO: Now use expat to parse out each title string and place it
@@ -197,10 +207,20 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
      - Finally free the parser.
   */
   fprintf(stderr, "\n");
-  
-  // p = XML_ParserCreate(NULL);
 
-  // XML_SetUserData();
+  if(!(q.stringAr = calloc(titles, sizeof(char*)))) {
+    fprintf(stderr, "\nError: failed allocation of stringAr");
+    return NULL;
+  }
+
+  p = XML_ParserCreate(NULL);
+
+  XML_SetUserData(p, &q);
+  XML_SetElementHandler(p, start, end);
+  XML_SetCharacterDataHandler(p, charhndl);
+  XML_Parse(p, xml, xml_length, 0);
+  XML_ParserFree(p);
+
   /* At this point we've extracted everything we need from the xml
      string, so free it. */
   free(xml);
@@ -209,9 +229,26 @@ Wikimedia_Titles* wikimedia_titles_parse(const char* path) {
   /* TODO: Sort the title strings using qsort. */
   fprintf(stderr, "\n");
 
+  qsort(q.stringAr, q.numStrings, sizeof(char *), cstring_cmp);
   /* TODO: Allocate a Wikimedia_Titles struct and initialize all its
      fields.  Again, handle an error appropriately. */
-  return NULL;
+  fprintf(stderr, "%s", q.stringAr[0]);
+  
+  list->title_count = titles;
+  if(!(list->titles = calloc(titles, sizeof(char*)))) {
+    fprintf(stderr, "\nError: failed allocation of stringAr");
+    return NULL;
+  }
+  
+  for(int s = 0; s < titles; s++) {
+    list->titles[s] = q.stringAr[s];
+  }
+
+  for(int s = 0; s < titles; s++) {
+    free(q.stringAr[s]);
+  }
+  free(q.stringAr);
+  return list;
 }
 
 int wikimedia_titles_count(Wikimedia_Titles* wt) {
